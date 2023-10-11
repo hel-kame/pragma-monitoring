@@ -1,13 +1,9 @@
-extern crate chrono;
 extern crate bigdecimal;
-
+extern crate chrono;
 
 use chrono::NaiveDateTime;
-use diesel::{Queryable, Selectable, QueryableByName};
+use diesel::{Queryable, QueryableByName, Selectable};
 use uuid::Uuid;
-
-
-
 
 #[derive(Debug, Queryable, Selectable, QueryableByName)]
 #[diesel(table_name = crate::schema::storage)]

@@ -1,9 +1,10 @@
-use axum::{handler::get, Router};
+use axum::{routing::get, Router};
 use std::net::SocketAddr;
 use hyper::Server;
+use prometheus::{TextEncoder, Encoder};
 
-#[tokio::main]
-async fn metrics_server() {
+
+pub async fn run_metrics_server() {
     let app = Router::new()
         .route("/", get(root_handler))
         .route("/metrics", get(metrics_handler));
@@ -17,9 +18,14 @@ async fn root_handler() -> String {
     "<a href=\"/metrics\">/metrics</a>".to_string()
 }
 
-async fn metrics_handler() -> String {
-    // Collect your metrics here
-    // This is just a placeholder string, you'd replace this with your actual metrics
-    let metrics = "test 123\ntest 456";
-    metrics.to_string()
+async fn metrics_handler() -> hyper::Response<hyper::Body> {
+    let mut buffer = vec![];
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+
+    hyper::Response::builder()
+        .header("Content-Type", encoder.format_type())
+        .body(hyper::Body::from(buffer))
+        .unwrap()
 }
