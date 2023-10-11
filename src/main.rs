@@ -2,30 +2,46 @@
 extern crate diesel;
 extern crate dotenv;
 
-use diesel::prelude::*;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel_async::{RunQueryDsl, AsyncPgConnection};
 use dotenv::dotenv;
-use std::env;
-
+use std::{env,time::SystemTime};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::*;
+use diesel_async::pooled_connection::PoolableConnection;
+use crate::models::Storage;
 mod schema;
 mod models;
+mod monitoring;
+use schema::storage::dsl::*;
 
-fn main() {
+
+
+#[tokio::main]
+async fn main() {
     dotenv().ok();
-
+    let pairs = vec!["BTC/USD"];
+    
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
-    let connection = PgConnection::establish(&database_url)
-        .expect(&format!("Error connecting to {}", database_url));
+    let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+    let pool = Pool::builder(config).build().unwrap();
 
-    use schema::storage::dsl::*;
+    let tasks: Vec<_> = pairs.into_iter().map(|pair| {
+        let pool_reference = &pool;
+        tokio::spawn(process_data(pool_reference, pair))
+    }).collect();
 
-    let results = storage
-        .load::<models::Storage>(&mut connection)
-        .expect("Error loading storages");
+    //let results: Vec<_> = futures::future::join_all(tasks).await.into_iter().map(|task| task.unwrap()).collect();
 
-    println!("Displaying {} storages", results.len());
-    for other_storage in results {
-        println!("{:?}", other_storage);
-    // Now you can use connection to interact with database
-    }
+    
+}
+
+
+
+async fn process_data(pool: &Pool<AsyncDieselConnectionManager<AsyncPgConnection>>, pair:&str, source : &str) -> Result<(), ()> { 
+    let mut conn = pool.get().await.unwrap();
+    let query = storage.filter::<Storage>(&mut conn).await.unwrap();
+    let time = monitoring::timeLastUpdate::timeSinceLastUpdate(query);
+    Ok(())
 }

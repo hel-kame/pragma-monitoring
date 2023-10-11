@@ -17,14 +17,13 @@ diesel::table! {
         network -> Varchar,
         data_type -> Varchar,
         block_hash -> Varchar,
-        block_number -> BigInt,
+        block_number -> Int8,
         block_timestamp -> Timestamp,
         transaction_hash -> Varchar,
         source -> Nullable<Varchar>,
         price -> Nullable<Float4>,
     }
 }
-
 
 diesel::allow_tables_to_appear_in_same_query!(
     indexers,
