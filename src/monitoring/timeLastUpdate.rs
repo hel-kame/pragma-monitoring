@@ -1,10 +1,9 @@
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use std::time::SystemTime;
 use crate::models::Storage;
-pub async fn timeSinceLastUpdate(query: Storage) -> i64  { 
-    let naive_datetime = NaiveDateTime::parse_from_str(query.block_timestamp, "%Y-%m-%dT%H:%M:%S").unwrap();
-    let datetime: DateTime<Utc> = DateTime::from_utc(naive_datetime, Utc);
+pub async fn time_since_last_update(query: Storage) -> u64  { 
+    let datetime: DateTime<Utc> = TimeZone::from_utc_datetime(&Utc,&query.block_timestamp);
     let timestamp = datetime.timestamp();
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-    now.unwrap().as_secs()-timestamp
+    now.unwrap().as_secs()- timestamp as u64
 }

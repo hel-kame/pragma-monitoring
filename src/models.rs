@@ -3,13 +3,13 @@ extern crate bigdecimal;
 
 
 use chrono::NaiveDateTime;
-use diesel::{Queryable, Selectable};
+use diesel::{Queryable, Selectable, QueryableByName};
 use uuid::Uuid;
 
 
 
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, QueryableByName)]
 #[diesel(table_name = crate::schema::storage)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Storage {
@@ -22,4 +22,5 @@ pub struct Storage {
     pub transaction_hash: String,
     pub source: Option<String>,
     pub price: Option<f32>,
+    pub pair_id: String,
 }

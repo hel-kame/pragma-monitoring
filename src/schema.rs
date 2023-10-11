@@ -22,6 +22,7 @@ diesel::table! {
         transaction_hash -> Varchar,
         source -> Nullable<Varchar>,
         price -> Nullable<Float4>,
+        pair_id -> Varchar,
     }
 }
 
