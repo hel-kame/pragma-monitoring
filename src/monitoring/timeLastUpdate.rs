@@ -1,8 +1,8 @@
-use crate::models::Storage;
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use crate::models::SpotEntry;
+use chrono::{DateTime, TimeZone, Utc};
 use std::time::SystemTime;
-pub async fn time_since_last_update(query: Storage) -> u64 {
-    let datetime: DateTime<Utc> = TimeZone::from_utc_datetime(&Utc, &query.block_timestamp);
+pub async fn time_since_last_update(query: SpotEntry) -> u64 {
+    let datetime: DateTime<Utc> = TimeZone::from_utc_datetime(&Utc, &query.timestamp.unwrap());
     let timestamp = datetime.timestamp();
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     now.unwrap().as_secs() - timestamp as u64

@@ -1,29 +1,38 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    indexers (id) {
-        id -> Uuid,
-        status -> Varchar,
-        #[sql_name = "type"]
-        type_ -> Varchar,
-        process_id -> Nullable<Int8>,
-        target_url -> Varchar,
+    future_entry (data_id) {
+        network -> Varchar,
+        pair_id -> Varchar,
+        data_id -> Varchar,
+        block_hash -> Varchar,
+        block_number -> BigInt,
+        block_timestamp -> Nullable<Timestamp>,
+        transaction_hash -> Varchar,
+        price -> Numeric,
+        timestamp -> Nullable<Timestamp>,
+        publisher -> Varchar,
+        source -> Varchar,
+        volume -> Numeric,
+        expiration_timestamp -> Nullable<Timestamp>,
+        _cursor -> BigInt,
     }
 }
 
 diesel::table! {
-    storage (id) {
-        id -> Uuid,
+    spot_entry (data_id) {
         network -> Varchar,
-        data_type -> Varchar,
-        block_hash -> Varchar,
-        block_number -> Int8,
-        block_timestamp -> Timestamp,
-        transaction_hash -> Varchar,
-        source -> Nullable<Varchar>,
-        price -> Nullable<Float4>,
         pair_id -> Varchar,
+        data_id -> Varchar,
+        block_hash -> Varchar,
+        block_number -> BigInt,
+        block_timestamp -> Nullable<Timestamp>,
+        transaction_hash -> Varchar,
+        price -> Numeric,
+        timestamp -> Nullable<Timestamp>,
+        publisher -> Varchar,
+        source -> Varchar,
+        volume -> Numeric,
+        _cursor -> BigInt,
     }
 }
-
-diesel::allow_tables_to_appear_in_same_query!(indexers, storage,);
