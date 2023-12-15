@@ -1,41 +1,81 @@
-// main.rs
 extern crate diesel;
 extern crate dotenv;
 
+use config::parse_pairs;
+use config::Config;
+use config::NetworkName;
 use diesel_async::pooled_connection::deadpool::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::AsyncPgConnection;
 use dotenv::dotenv;
+use starknet::core::types::FieldElement;
 use std::env;
+use std::str::FromStr;
+
+// Configuration
+mod config;
+// Error handling
 mod error;
+// Database models
 mod models;
+// Monitoring functions
 mod monitoring;
+// Processing functions
 mod process_data;
-mod schema;
+// Server
 mod server;
+// Database schema
+mod schema;
+// Constants
+mod constants;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
+    // Load environment variables from .env file
     dotenv().ok();
-    let pairs = vec![("BTC/USD", "CEX", 8), ("ETH/USD", "CEX",8), ("BTC/USD", "COINBASE",8), ("ETH/USD", "COINBASE",8), ("BTC/USD", "BITSTAMP",8), ("ETH/USD", "BITSTAMP",8),("BTC/USD", "OKX",8), ("ETH/USD", "OKX",8),("BTC/USD", "GECKOTERMINAL",8), ("ETH/USD", "GECKOTERMINAL",8), ("BTC/USD", "KAIKO",8), ("ETH/USD", "KAIKO",8),];
+
+    // Define the pairs to monitor
+    let network = std::env::var("NETWORK").expect("NETWORK must be set");
+    let oracle_address = std::env::var("ORACLE_ADDRESS").expect("ORACLE_ADDRESS must be set");
+    let pairs = std::env::var("PAIRS").expect("PAIRS must be set");
+
+    let monitoring_config = Config::new(
+        NetworkName::from_str(&network).expect("Invalid network name"),
+        FieldElement::from_hex_be(&oracle_address).expect("Invalid oracle address"),
+        parse_pairs(&pairs),
+    )
+    .await;
+
+    log::info!("Successfully fetched config: {:?}", monitoring_config);
+
     tokio::spawn(server::run_metrics_server());
+
     let database_url: String = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
     let pool = Pool::builder(config).build().unwrap();
+
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+
     loop {
         interval.tick().await; // Wait for the next tick
 
-        let tasks: Vec<_> = pairs
+        let tasks: Vec<_> = monitoring_config
             .clone()
+            .sources
             .into_iter()
-            .flat_map(|(pair, srce, decimals)| {
-                let pool_ref_for_pair = pool.clone();
-                let pool_ref_for_pair_and_source = pool.clone();
-                
+            .flat_map(|(pair, sources)| {
                 vec![
-                    tokio::spawn(Box::pin(process_data::process_data_by_pair(pool_ref_for_pair, pair, decimals))),
-                    tokio::spawn(Box::pin(process_data::process_data_by_pair_and_source(pool_ref_for_pair_and_source, pair, srce, decimals))),
+                    tokio::spawn(Box::pin(process_data::process_data_by_pair(
+                        pool.clone(),
+                        pair.clone(),
+                    ))),
+                    tokio::spawn(Box::pin(process_data::process_data_by_pair_and_sources(
+                        pool.clone(),
+                        pair.clone(),
+                        sources,
+                        monitoring_config.clone(),
+                    ))),
                 ]
             })
             .collect();
@@ -49,8 +89,8 @@ async fn main() {
         // Process or output the results
         for result in &results {
             match result {
-                Ok(data) => println!("Task succeeded with data: {:?}", data),
-                Err(e) => eprintln!("Task failed with error: {:?}", e),
+                Ok(data) => log::info!("Task succeeded with data: {:?}", data),
+                Err(e) => log::error!("Task failed with error: {:?}", e),
             }
         }
     }
