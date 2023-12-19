@@ -21,6 +21,8 @@ pub enum NetworkName {
     Mainnet,
     #[strum(ascii_case_insensitive)]
     Testnet,
+    #[strum(ascii_case_insensitive)]
+    Katana,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +95,26 @@ impl Config {
                     },
                 }
             }
+            NetworkName::Katana => {
+                let url = Url::parse("http://localhost:5050").expect("Invalid JSON RPC URL");
+                let rpc_client = JsonRpcClient::new(HttpTransport::new(url)); // Katana URL
+
+                let (decimals, sources, publishers, publisher_registry_address) =
+                    init_oracle_config(&rpc_client, oracle_address, pairs.clone()).await;
+
+                Self {
+                    pairs,
+                    sources,
+                    publishers,
+                    decimals,
+                    network: Network {
+                        name: "katana".to_string(),
+                        provider: Arc::new(rpc_client),
+                        oracle_address,
+                        publisher_registry_address,
+                    },
+                }
+            }
         }
     }
 }
@@ -140,8 +162,26 @@ async fn init_oracle_config(
 
     let publishers = publishers[1..].to_vec();
 
+    // Exclude publishers that are not supported by the monitoring service
+    let excluded_publishers = std::env::var("IGNORE_PUBLISHERS")
+        .unwrap_or("".to_string())
+        .split(',')
+        .map(|publisher| publisher.to_string())
+        .collect::<Vec<String>>();
+
+    let publishers = publishers
+        .into_iter()
+        .filter(|publisher| !excluded_publishers.contains(publisher))
+        .collect::<Vec<String>>();
+
     let mut sources: HashMap<String, Vec<String>> = HashMap::new();
     let mut decimals: HashMap<String, u32> = HashMap::new();
+
+    let excluded_sources = std::env::var("IGNORE_SOURCES")
+        .unwrap_or("".to_string())
+        .split(',')
+        .map(|source| source.to_string())
+        .collect::<Vec<String>>();
 
     for pair in &pairs {
         let field_pair = cairo_short_string_to_felt(pair).unwrap();
@@ -212,7 +252,7 @@ async fn init_oracle_config(
 
         for source in spot_pair_sources {
             let source = parse_cairo_short_string(&source).unwrap();
-            if !pair_sources.contains(&source) {
+            if !pair_sources.contains(&source) && !excluded_sources.contains(&source) {
                 pair_sources.push(source);
             }
         }

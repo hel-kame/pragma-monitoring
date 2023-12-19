@@ -6,10 +6,14 @@ use config::Config;
 use config::NetworkName;
 use diesel_async::pooled_connection::deadpool::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::AsyncPgConnection;
+
 use dotenv::dotenv;
 use starknet::core::types::FieldElement;
 use std::env;
 use std::str::FromStr;
+
+use crate::process_data::is_syncing;
 
 // Configuration
 mod config;
@@ -27,6 +31,9 @@ mod server;
 mod schema;
 // Constants
 mod constants;
+
+#[cfg(test)]
+mod tests;
 
 #[tokio::main]
 async fn main() {
@@ -57,8 +64,29 @@ async fn main() {
 
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
 
+    monitor(&pool, monitoring_config, &mut interval, true).await;
+}
+
+pub(crate) async fn monitor(
+    pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>,
+    monitoring_config: Config,
+    interval: &mut tokio::time::Interval,
+    wait_for_syncing: bool,
+) {
     loop {
         interval.tick().await; // Wait for the next tick
+
+        // Skip if indexer is still syncing
+        if wait_for_syncing {
+            if let Some(blocks_left) =
+                is_syncing(pool.clone(), monitoring_config.network.provider.clone())
+                    .await
+                    .unwrap()
+            {
+                log::info!("Indexer is still syncing ♻️ blocks left: {}", blocks_left);
+                continue;
+            }
+        }
 
         let tasks: Vec<_> = monitoring_config
             .clone()
