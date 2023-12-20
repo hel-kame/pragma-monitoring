@@ -9,18 +9,18 @@
 
 ARG RUST_VERSION=1.72.0
 ARG APP_NAME=monitoring
-FROM rust:${RUST_VERSION}-slim-bullseye AS build
+FROM rust:${RUST_VERSION}-slim-buster AS build
 ARG APP_NAME
 WORKDIR /app
 
 
 
 RUN apt update
-RUN apt install -y libpq-dev libssl-dev pkg-config
+RUN apt install -y libpq-dev pkg-config libssl-dev
 
 # Install ca-certificates needed for AWS sdk
-# RUN apt-get install -y --no-install-recommends ca-certificates
-# RUN apt-get install -y --no-install-recommends wget
+RUN apt-get install -y --no-install-recommends ca-certificates
+RUN apt-get install -y --no-install-recommends wget
 
 
 
@@ -43,6 +43,7 @@ cargo build --locked --release
 cp ./target/release/$APP_NAME /bin/server
 EOF
 
+
 ################################################################################
 # Create a new stage for running the application that contains the minimal
 # runtime dependencies for the application. This often uses a different base
@@ -54,19 +55,20 @@ EOF
 # most recent version of that tag when you build your Dockerfile. If
 # reproducability is important, consider using a digest
 # (e.g., debian@sha256:ac707220fbd7b67fc19b112cee8170b41a9e97f703f588b2cdbbcdcecdd8af57).
-FROM debian:12-slim AS final
+FROM debian:bullseye-slim AS final
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
 ARG UID=10001
-RUN apt update
-RUN apt install -y libpq-dev
-RUN apt-get install -y procps
+RUN apt-get update
+RUN apt-get install -y libpq-dev libssl1.1 procps
+RUN apt-get clean
+RUN rm -rf /var/lib/apt/lists/*
 
 # Copy the executable from the "build" stage.
 COPY --from=build /bin/server /bin/
 # Copy all the app binaries
-# COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 RUN adduser \
     --disabled-password \
@@ -80,6 +82,9 @@ USER appuser
 
 # Expose the port that the application listens on.
 EXPOSE 8080
+
+# Set the log level for the application.
+ENV RUST_LOG=info
 
 # What the container should run when it is started.
 CMD ["/bin/server"]
