@@ -3,7 +3,8 @@ extern crate dotenv;
 
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::config::get_config;
+use crate::config::NetworkName;
 use crate::constants::NUM_SOURCES;
 use crate::constants::PAIR_PRICE;
 use crate::constants::PRICE_DEVIATION;
@@ -13,10 +14,10 @@ use crate::constants::TIME_SINCE_LAST_UPDATE_PUBLISHER;
 use crate::diesel::QueryDsl;
 use crate::error::MonitoringError;
 use crate::models::SpotEntry;
-use crate::monitoring::price_deviation::price_deviation;
-use crate::monitoring::source_deviation::source_deviation;
-use crate::monitoring::time_since_last_update::time_since_last_update;
-use crate::schema::spot_entry::dsl::*;
+use crate::monitoring::{price_deviation, source_deviation, time_since_last_update};
+
+use crate::schema::mainnet_spot_entry::dsl as mainnet_dsl;
+use crate::schema::spot_entry::dsl as testnet_dsl;
 
 use bigdecimal::ToPrimitive;
 use diesel::ExpressionMethods;
@@ -36,18 +37,35 @@ pub async fn process_data_by_pair(
         .await
         .map_err(|_| MonitoringError::Connection("Failed to get connection".to_string()))?;
 
-    let result: Result<SpotEntry, _> = spot_entry
-        .filter(pair_id.eq(pair.clone()))
-        .order(block_timestamp.desc())
-        .first(&mut conn)
-        .await;
+    let config = get_config(None).await;
+
+    let result: Result<SpotEntry, _> = match config.network().name {
+        NetworkName::Testnet => {
+            testnet_dsl::spot_entry
+                .filter(testnet_dsl::pair_id.eq(pair.clone()))
+                .order(testnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+        NetworkName::Mainnet => {
+            mainnet_dsl::mainnet_spot_entry
+                .filter(mainnet_dsl::pair_id.eq(pair.clone()))
+                .order(mainnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+    };
 
     log::info!("Processing data for pair: {}", pair);
 
+    let config = get_config(None).await;
+
     match result {
         Ok(data) => {
+            let network_env = &config.network_str();
             let seconds_since_last_publish = time_since_last_update(&data);
-            let time_labels = TIME_SINCE_LAST_UPDATE_PAIR_ID.with_label_values(&[&pair]);
+            let time_labels =
+                TIME_SINCE_LAST_UPDATE_PAIR_ID.with_label_values(&[network_env, &pair]);
 
             time_labels.set(seconds_since_last_publish as f64);
 
@@ -61,16 +79,16 @@ pub async fn process_data_by_pair_and_sources(
     pool: deadpool::managed::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>,
     pair: String,
     sources: Vec<String>,
-    config: Config,
 ) -> Result<u64, MonitoringError> {
     let mut timestamps = Vec::new();
 
-    let decimals = *config.decimals.get(&pair.clone()).unwrap();
+    let config = get_config(None).await;
+
+    let decimals = *config.decimals().get(&pair.clone()).unwrap();
 
     for src in sources {
         log::info!("Processing data for pair: {} and source: {}", pair, src);
-        let res =
-            process_data_by_pair_and_source(pool.clone(), &pair, &src, decimals, &config).await?;
+        let res = process_data_by_pair_and_source(pool.clone(), &pair, &src, decimals).await?;
         timestamps.push(res);
     }
 
@@ -82,29 +100,45 @@ pub async fn process_data_by_pair_and_source(
     pair: &str,
     src: &str,
     decimals: u32,
-    config: &Config,
 ) -> Result<u64, MonitoringError> {
     let mut conn = pool
         .get()
         .await
         .map_err(|_| MonitoringError::Connection("Failed to get connection".to_string()))?;
 
-    let filtered_by_source_result: Result<SpotEntry, _> = spot_entry
-        .filter(pair_id.eq(pair))
-        .filter(source.eq(src))
-        .order(block_timestamp.desc())
-        .first(&mut conn)
-        .await;
+    let config = get_config(None).await;
+
+    let filtered_by_source_result: Result<SpotEntry, _> = match config.network().name {
+        NetworkName::Testnet => {
+            testnet_dsl::spot_entry
+                .filter(testnet_dsl::pair_id.eq(pair))
+                .filter(testnet_dsl::source.eq(src))
+                .order(testnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+        NetworkName::Mainnet => {
+            mainnet_dsl::mainnet_spot_entry
+                .filter(mainnet_dsl::pair_id.eq(pair))
+                .filter(mainnet_dsl::source.eq(src))
+                .order(mainnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+    };
 
     match filtered_by_source_result {
         Ok(data) => {
+            let network_env = &config.network_str();
+
             // Get the labels
             let time_labels =
-                TIME_SINCE_LAST_UPDATE_PUBLISHER.with_label_values(&[&data.publisher]);
-            let price_labels = PAIR_PRICE.with_label_values(&[pair, src]);
-            let deviation_labels = PRICE_DEVIATION.with_label_values(&[pair, src]);
-            let source_deviation_labels = PRICE_DEVIATION_SOURCE.with_label_values(&[pair, src]);
-            let num_sources_labels = NUM_SOURCES.with_label_values(&[pair]);
+                TIME_SINCE_LAST_UPDATE_PUBLISHER.with_label_values(&[network_env, &data.publisher]);
+            let price_labels = PAIR_PRICE.with_label_values(&[network_env, pair, src]);
+            let deviation_labels = PRICE_DEVIATION.with_label_values(&[network_env, pair, src]);
+            let source_deviation_labels =
+                PRICE_DEVIATION_SOURCE.with_label_values(&[network_env, pair, src]);
+            let num_sources_labels = NUM_SOURCES.with_label_values(&[network_env, pair]);
 
             // Compute metrics
             let time = time_since_last_update(&data);
@@ -115,7 +149,7 @@ pub async fn process_data_by_pair_and_source(
 
             let deviation = price_deviation(&data, normalized_price).await?;
             let (source_deviation, num_sources_aggregated) =
-                source_deviation(&data, normalized_price, config.clone()).await?;
+                source_deviation(&data, normalized_price).await?;
 
             // Set the metrics
             price_labels.set(normalized_price);
@@ -141,10 +175,22 @@ pub async fn is_syncing(
         .await
         .map_err(|_| MonitoringError::Connection("Failed to get connection".to_string()))?;
 
-    let latest_entry: Result<SpotEntry, _> = spot_entry
-        .order(block_timestamp.desc())
-        .first(&mut conn)
-        .await;
+    let config = get_config(None).await;
+
+    let latest_entry: Result<SpotEntry, _> = match config.network().name {
+        NetworkName::Testnet => {
+            testnet_dsl::spot_entry
+                .order(testnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+        NetworkName::Mainnet => {
+            mainnet_dsl::mainnet_spot_entry
+                .order(mainnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+    };
 
     match latest_entry {
         Ok(entry) => {
