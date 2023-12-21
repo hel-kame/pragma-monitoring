@@ -96,6 +96,8 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=${{ inputs.release_tag_name }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -107,9 +109,15 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+          tags=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          if [[ -z "$tags" ]]; then
+            echo "No tags specified, skipping docker buildx imagetools create command"
+          else
+            docker buildx imagetools create $tags \
+              $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+          fi
 
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
