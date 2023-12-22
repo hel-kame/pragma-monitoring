@@ -1,7 +1,7 @@
 use bigdecimal::ToPrimitive;
 use starknet::{
     core::{
-        types::{BlockId, FieldElement, FunctionCall},
+        types::{BlockId, BlockTag, FieldElement, FunctionCall},
         utils::cairo_short_string_to_felt,
     },
     macros::selector,
@@ -29,13 +29,13 @@ pub async fn source_deviation<T: Entry>(
                 entry_point_selector: selector!("get_data_median"),
                 calldata: vec![FieldElement::ZERO, field_pair],
             },
-            BlockId::Number(query.block_number().try_into().unwrap()),
+            BlockId::Tag(BlockTag::Latest),
         )
         .await
         .map_err(|e| MonitoringError::OnChain(e.to_string()))?;
 
     let decimals = config
-        .decimals()
+        .decimals(query.data_type())
         .get(query.pair_id())
         .ok_or(MonitoringError::OnChain(format!(
             "Failed to get decimals for pair {:?}",

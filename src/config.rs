@@ -9,7 +9,7 @@ use starknet::{
     macros::selector,
     providers::{jsonrpc::HttpTransport, JsonRpcClient, Provider},
 };
-use strum::{EnumString, IntoStaticStr};
+use strum::{Display, EnumString, IntoStaticStr};
 use tokio::sync::OnceCell;
 use url::Url;
 
@@ -21,7 +21,7 @@ pub enum NetworkName {
     Testnet,
 }
 
-#[derive(Debug, EnumString, IntoStaticStr)]
+#[derive(Debug, EnumString, IntoStaticStr, PartialEq, Eq, Hash, Clone, Display)]
 pub enum DataType {
     #[strum(ascii_case_insensitive)]
     Spot,
@@ -38,13 +38,20 @@ pub struct Network {
 }
 
 #[derive(Debug, Clone)]
+pub struct DataInfo {
+    pub pairs: Vec<String>,
+    pub sources: HashMap<String, Vec<String>>,
+    pub decimals: HashMap<String, u32>,
+    pub table_name: String,
+}
+
+#[derive(Debug, Clone)]
 #[allow(unused)]
 pub struct Config {
-    pairs: Vec<String>,
-    sources: HashMap<String, Vec<String>>, // Mapping from pair to sources
-    decimals: HashMap<String, u32>,        // Mapping from pair to decimals
+    data_info: HashMap<DataType, DataInfo>,
     publishers: Vec<String>,
     network: Network,
+    indexer_url: String,
 }
 
 /// We are using `ArcSwap` as it allow us to replace the new `Config` with
@@ -54,22 +61,38 @@ pub static CONFIG: OnceCell<ArcSwap<Config>> = OnceCell::const_new();
 
 impl Config {
     pub async fn new(config_input: ConfigInput) -> Self {
+        let indexer_url =
+            std::env::var("INDEXER_SERVICE_URL").expect("INDEXER_SERVICE_URL must be set");
+
         // Create RPC Client
         let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
         let rpc_client = JsonRpcClient::new(HttpTransport::new(Url::parse(&rpc_url).unwrap()));
 
-        let (decimals, sources, publishers, publisher_registry_address) = init_oracle_config(
+        let (publishers, publisher_registry_address) =
+            init_publishers(&rpc_client, config_input.oracle_address).await;
+
+        let spot_info = init_spot_config(
             &rpc_client,
             config_input.oracle_address,
-            config_input.pairs.clone(),
+            config_input.spot_pairs.clone(),
         )
         .await;
 
+        let future_info = init_future_config(
+            &rpc_client,
+            config_input.oracle_address,
+            config_input.future_pairs.clone(),
+        )
+        .await;
+
+        let data_info = vec![(DataType::Spot, spot_info), (DataType::Future, future_info)]
+            .into_iter()
+            .collect::<HashMap<DataType, DataInfo>>();
+
         Self {
-            pairs: config_input.pairs,
-            sources,
+            indexer_url,
             publishers,
-            decimals,
+            data_info,
             network: Network {
                 name: config_input.network,
                 provider: Arc::new(rpc_client),
@@ -79,12 +102,12 @@ impl Config {
         }
     }
 
-    pub fn sources(&self) -> &HashMap<String, Vec<String>> {
-        &self.sources
+    pub fn sources(&self, data_type: DataType) -> &HashMap<String, Vec<String>> {
+        &self.data_info.get(&data_type).unwrap().sources
     }
 
-    pub fn decimals(&self) -> &HashMap<String, u32> {
-        &self.decimals
+    pub fn decimals(&self, data_type: DataType) -> &HashMap<String, u32> {
+        &self.data_info.get(&data_type).unwrap().decimals
     }
 
     pub fn network(&self) -> &Network {
@@ -94,13 +117,22 @@ impl Config {
     pub fn network_str(&self) -> &str {
         self.network.name.clone().into()
     }
+
+    pub fn indexer_url(&self) -> &str {
+        &self.indexer_url
+    }
+
+    pub fn table_name(&self, data_type: DataType) -> &String {
+        &self.data_info.get(&data_type).unwrap().table_name
+    }
 }
 
 #[derive(Debug)]
 pub struct ConfigInput {
     pub network: NetworkName,
     pub oracle_address: FieldElement,
-    pub pairs: Vec<String>,
+    pub spot_pairs: Vec<String>,
+    pub future_pairs: Vec<String>,
 }
 
 pub async fn get_config(config_input: Option<ConfigInput>) -> Guard<Arc<Config>> {
@@ -112,14 +144,17 @@ pub async fn get_config(config_input: Option<ConfigInput>) -> Guard<Arc<Config>>
                     let network = std::env::var("NETWORK").expect("NETWORK must be set");
                     let oracle_address =
                         std::env::var("ORACLE_ADDRESS").expect("ORACLE_ADDRESS must be set");
-                    let pairs = std::env::var("PAIRS").expect("PAIRS must be set");
+                    let spot_pairs = std::env::var("SPOT_PAIRS").expect("SPOT_PAIRS must be set");
+                    let future_pairs =
+                        std::env::var("FUTURE_PAIRS").expect("FUTURE_PAIRS must be set");
 
                     ArcSwap::from_pointee(
                         Config::new(ConfigInput {
                             network: NetworkName::from_str(&network).expect("Invalid network name"),
                             oracle_address: FieldElement::from_hex_be(&oracle_address)
                                 .expect("Invalid oracle address"),
-                            pairs: parse_pairs(&pairs),
+                            spot_pairs: parse_pairs(&spot_pairs),
+                            future_pairs: parse_pairs(&future_pairs),
                         })
                         .await,
                     )
@@ -144,16 +179,10 @@ pub async fn config_force_init(config_input: ConfigInput) {
     };
 }
 
-async fn init_oracle_config(
+async fn init_publishers(
     rpc_client: &JsonRpcClient<HttpTransport>,
     oracle_address: FieldElement,
-    pairs: Vec<String>,
-) -> (
-    HashMap<String, u32>,
-    HashMap<String, Vec<String>>,
-    Vec<String>,
-    FieldElement,
-) {
+) -> (Vec<String>, FieldElement) {
     // Fetch publisher registry address
     let publisher_registry_address = *rpc_client
         .call(
@@ -199,6 +228,14 @@ async fn init_oracle_config(
         .filter(|publisher| !excluded_publishers.contains(publisher))
         .collect::<Vec<String>>();
 
+    (publishers, publisher_registry_address)
+}
+
+async fn init_spot_config(
+    rpc_client: &JsonRpcClient<HttpTransport>,
+    oracle_address: FieldElement,
+    pairs: Vec<String>,
+) -> DataInfo {
     let mut sources: HashMap<String, Vec<String>> = HashMap::new();
     let mut decimals: HashMap<String, u32> = HashMap::new();
 
@@ -208,8 +245,8 @@ async fn init_oracle_config(
         .map(|source| source.to_string())
         .collect::<Vec<String>>();
 
-    for pair in &pairs {
-        let field_pair = cairo_short_string_to_felt(pair).unwrap();
+    for pair in pairs.clone() {
+        let field_pair = cairo_short_string_to_felt(&pair).unwrap();
 
         // Fetch decimals
         let spot_decimals = *rpc_client
@@ -218,21 +255,6 @@ async fn init_oracle_config(
                     contract_address: oracle_address,
                     entry_point_selector: selector!("get_decimals"),
                     calldata: vec![FieldElement::ZERO, field_pair],
-                },
-                BlockId::Tag(BlockTag::Latest),
-            )
-            .await
-            .expect("failed to get decimals")
-            .first()
-            .unwrap();
-
-        // TODO: support future pairs
-        let _future_decimals = *rpc_client
-            .call(
-                FunctionCall {
-                    contract_address: oracle_address,
-                    entry_point_selector: selector!("get_decimals"),
-                    calldata: vec![FieldElement::ONE, field_pair, FieldElement::ZERO],
                 },
                 BlockId::Tag(BlockTag::Latest),
             )
@@ -256,18 +278,6 @@ async fn init_oracle_config(
             .await
             .expect("failed to get pair sources");
 
-        let _future_pair_sources = rpc_client
-            .call(
-                FunctionCall {
-                    contract_address: oracle_address,
-                    entry_point_selector: selector!("get_all_sources"),
-                    calldata: vec![FieldElement::ONE, field_pair, FieldElement::ZERO],
-                },
-                BlockId::Tag(BlockTag::Latest),
-            )
-            .await
-            .expect("failed to get pair sources");
-
         // Store all sources for the given pair
         let mut pair_sources = Vec::new();
 
@@ -285,7 +295,83 @@ async fn init_oracle_config(
         sources.insert(pair.to_string(), pair_sources);
     }
 
-    (decimals, sources, publishers, publisher_registry_address)
+    DataInfo {
+        decimals,
+        pairs,
+        sources,
+        table_name: "spot_entry".to_string(),
+    }
+}
+
+async fn init_future_config(
+    rpc_client: &JsonRpcClient<HttpTransport>,
+    oracle_address: FieldElement,
+    pairs: Vec<String>,
+) -> DataInfo {
+    let mut sources: HashMap<String, Vec<String>> = HashMap::new();
+    let mut decimals: HashMap<String, u32> = HashMap::new();
+
+    let excluded_sources = std::env::var("IGNORE_SOURCES")
+        .unwrap_or("".to_string())
+        .split(',')
+        .map(|source| source.to_string())
+        .collect::<Vec<String>>();
+
+    for pair in pairs.clone() {
+        let field_pair = cairo_short_string_to_felt(&pair).unwrap();
+
+        // Fetch decimals
+        let future_decimals = *rpc_client
+            .call(
+                FunctionCall {
+                    contract_address: oracle_address,
+                    entry_point_selector: selector!("get_decimals"),
+                    calldata: vec![FieldElement::ONE, field_pair, FieldElement::ZERO],
+                },
+                BlockId::Tag(BlockTag::Latest),
+            )
+            .await
+            .expect("failed to get decimals")
+            .first()
+            .unwrap();
+
+        decimals.insert(pair.to_string(), future_decimals.try_into().unwrap());
+
+        // Fetch sources
+        let future_pair_sources = rpc_client
+            .call(
+                FunctionCall {
+                    contract_address: oracle_address,
+                    entry_point_selector: selector!("get_all_sources"),
+                    calldata: vec![FieldElement::ONE, field_pair, FieldElement::ZERO],
+                },
+                BlockId::Tag(BlockTag::Latest),
+            )
+            .await
+            .expect("failed to get pair sources");
+
+        // Store all sources for the given pair
+        let mut pair_sources = Vec::new();
+
+        // Remove first elements of sources' arrays
+        let future_pair_sources = future_pair_sources[1..].to_vec();
+
+        for source in future_pair_sources {
+            let source = parse_cairo_short_string(&source).unwrap();
+            if !pair_sources.contains(&source) && !excluded_sources.contains(&source) {
+                pair_sources.push(source);
+            }
+        }
+
+        sources.insert(pair.to_string(), pair_sources);
+    }
+
+    DataInfo {
+        decimals,
+        pairs,
+        sources,
+        table_name: "future_entry".to_string(),
+    }
 }
 
 /// Parse pairs from a comma separated string.
