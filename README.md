@@ -28,7 +28,7 @@ docker compose up -d
 
 You can then access prometheus dashboard at http://localhost:9000 and grafana at http://localhost:3000.
 
-Make sure to first fil the envirronement file with your own config parameters:
+Make sure to first fill the envirronement file with your own config parameters:
 
 ```bash
 # The database URL the application will use to connect to the database.
@@ -36,6 +36,9 @@ DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgres'
 
 # RPC URL
 RPC_URL=
+
+# Indexer Service URL
+INDEXER_SERVICE_URL=
 
 # Config
 NETWORK=testnet
