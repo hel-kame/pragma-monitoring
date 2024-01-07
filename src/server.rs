@@ -9,7 +9,11 @@ pub async fn run_metrics_server() {
         .route("/", get(root_handler))
         .route("/metrics", get(metrics_handler));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| String::from("8080"))
+        .parse::<u16>()
+        .unwrap();
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     info!("Server Started, listening on http://{}", addr);
 
