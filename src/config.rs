@@ -122,8 +122,12 @@ impl Config {
         &self.indexer_url
     }
 
-    pub fn table_name(&self, data_type: DataType) -> &String {
-        &self.data_info.get(&data_type).unwrap().table_name
+    pub fn table_name(&self, data_type: DataType) -> String {
+        let table_name = &self.data_info.get(&data_type).unwrap().table_name;
+        match self.network.name {
+            NetworkName::Mainnet => format!("mainnet_{}", table_name),
+            NetworkName::Testnet => table_name.to_string(),
+        }
     }
 }
 

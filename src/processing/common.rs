@@ -24,7 +24,7 @@ pub async fn is_syncing(data_type: &DataType) -> Result<bool, MonitoringError> {
 
     let table_name = config.table_name(data_type.clone());
 
-    let status = get_sink_status(table_name, config.indexer_url()).await?;
+    let status = get_sink_status(&table_name, config.indexer_url()).await?;
 
     let provider = &config.network().provider;
 
