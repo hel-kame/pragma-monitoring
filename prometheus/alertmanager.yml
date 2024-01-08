@@ -14,5 +14,8 @@ receivers:
       - bot_token: "${TELEGRAM_BOT_TOKEN}"
         chat_id: -1001904637278
         parse_mode: ""
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: -1002060420752
+        parse_mode: ""
     opsgenie_configs:
       - api_key: "${OPSGENIE_API_KEY}"
