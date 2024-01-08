@@ -2,13 +2,13 @@ groups:
   - name: Oracle
     rules:
       - alert: TimeSinceLastUpdateTooHigh
-        expr: time_since_last_update_seconds > 1200
+        expr: time_since_last_update_seconds > 1800
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Time since the last update is too high"
-          description: "The time since the last update from {{ $labels.publisher }} has exceeded 1200 seconds."
+          description: "The time since the last update from {{ $labels.publisher }} has exceeded 1800 seconds."
       - alert: WrongPrice
         expr: price_deviation > 0.02
         for: 5m

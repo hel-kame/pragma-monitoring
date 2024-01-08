@@ -48,10 +48,12 @@ pub async fn price_deviation<T: Entry>(
         .await
         .map_err(|e| MonitoringError::Api(e.to_string()))?;
 
-    let coins_prices: CoinPricesDTO = response
-        .json()
-        .await
-        .map_err(|e| MonitoringError::Api(e.to_string()))?;
+    let coins_prices: CoinPricesDTO = response.json().await.map_err(|e| {
+        MonitoringError::Api(format!(
+            "Failed to convert to DTO object, got error {:?}",
+            e.to_string()
+        ))
+    })?;
 
     let api_id = format!("coingecko:{}", coingecko_id);
 
