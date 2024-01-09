@@ -33,3 +33,11 @@ groups:
         annotations:
           summary: "Source deviation is too high"
           description: "The source deviation of {{ $labels.pair }} from {{ $labels.source }} has exceeded 5%."
+      - alert: IndexerDown
+        expr: indexer_blocks_left > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Indexer is down"
+          description: "The {{ $labels.network }} indexer for {{ $labels.type }} is lagging behind 10 blocks."

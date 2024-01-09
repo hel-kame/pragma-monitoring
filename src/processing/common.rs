@@ -32,7 +32,10 @@ pub async fn is_syncing(data_type: &DataType) -> Result<bool, MonitoringError> {
 
     // Update the prometheus metric
     INDEXER_BLOCKS_LEFT
-        .with_label_values(&[(&config.network().name).into(), &data_type.to_string()])
+        .with_label_values(&[
+            (&config.network().name).into(),
+            &data_type.to_string().to_ascii_lowercase(),
+        ])
         .set(blocks_left.unwrap_or(0) as i64);
 
     // Check if any indexer is still syncing
