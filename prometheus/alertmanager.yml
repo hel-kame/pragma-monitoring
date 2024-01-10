@@ -2,20 +2,49 @@ global:
   resolve_timeout: 5m
 
 route:
-  group_by: ["instance", "severity"]
-  group_wait: 30s
+  # When a new group of alerts is created by an incoming alert, wait at
+  # least 'group_wait' to send the initial notification.
+  # This way ensures that you get multiple alerts for the same group that start
+  # firing shortly after another are batched together on the first
+  # notification.
+  group_wait: 10s
+
+  # When the first notification was sent, wait 'group_interval' to send a batch
+  # of new alerts that started firing for that group.
   group_interval: 5m
-  repeat_interval: 4h
-  receiver: "main-telegram"
+
+  # If an alert has successfully been sent, wait 'repeat_interval' to
+  # resend them.
+  repeat_interval: 30m
+
+  # A default receiver
+  receiver: "internal"
+
+  # All the above attributes are inherited by all child routes and can
+  # overwritten on each.
+  routes:
+    - receiver: "internal"
+      group_wait: 10s
+      match_re:
+        severity: critical|warning
+      continue: true
+
+    - receiver: "public"
+      group_wait: 10s
+      match_re:
+        severity: critical
+      continue: true
 
 receivers:
-  - name: "main-telegram"
+  - name: "internal"
     telegram_configs:
       - bot_token: "${TELEGRAM_BOT_TOKEN}"
         chat_id: -1001904637278
         parse_mode: ""
+    opsgenie_configs:
+      - api_key: "${OPSGENIE_API_KEY}"
+  - name: "public"
+    telegram_configs:
       - bot_token: "${TELEGRAM_BOT_TOKEN}"
         chat_id: -1002060420752
         parse_mode: ""
-    opsgenie_configs:
-      - api_key: "${OPSGENIE_API_KEY}"
