@@ -5,7 +5,7 @@ groups:
         expr: time_since_last_update_seconds > 1800
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: "Time since the last update is too high"
           description: "The time since the last update from {{ $labels.publisher }} has exceeded 1800 seconds."
@@ -26,13 +26,13 @@ groups:
           summary: "Too few sources"
           description: "The number of sources for {{ $labels.pair }} has fallen below 5."
       - alert: SourceDeviation
-        expr: price_deviation_source > 0.025
+        expr: price_deviation_source > 0.02
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: "Source deviation is too high"
-          description: "The source deviation of {{ $labels.pair }} from {{ $labels.source }} has exceeded 2.5%."
+          description: "The source deviation of {{ $labels.pair }} from {{ $labels.source }} has exceeded 2%."
       - alert: IndexerDown
         expr: indexer_blocks_left > 10
         for: 5m

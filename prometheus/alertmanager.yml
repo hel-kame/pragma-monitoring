@@ -48,3 +48,7 @@ receivers:
       - bot_token: "${TELEGRAM_BOT_TOKEN}"
         chat_id: -1002060420752
         parse_mode: ""
+
+# The directory from which notification templates are read.
+templates:
+  - '/etc/alertmanager/template/*.tmpl'
