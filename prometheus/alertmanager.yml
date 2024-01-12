@@ -18,15 +18,21 @@ route:
   repeat_interval: 30m
 
   # A default receiver
-  receiver: "internal"
+  receiver: "internal-critical"
 
   # All the above attributes are inherited by all child routes and can
   # overwritten on each.
   routes:
-    - receiver: "internal"
+    - receiver: "internal-critical"
       group_wait: 10s
       match_re:
-        severity: critical|warning
+        severity: critical
+      continue: true
+
+    - receiver: "internal-warning"
+      group_wait: 10s
+      match_re:
+        severity: warning
       continue: true
 
     - receiver: "public"
@@ -36,16 +42,17 @@ route:
       continue: true
 
 receivers:
-  - name: "internal"
+  - name: "internal-warning"
     telegram_configs:
-      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+      - bot_token: "${{TELEGRAM_TOKEN}}}}"
         chat_id: -1001904637278
         parse_mode: ""
+  - name: "internal-critical"
     opsgenie_configs:
-      - api_key: "${OPSGENIE_API_KEY}"
+      - api_key: "${{OPS_GENIE_API_KEY}}"
   - name: "public"
     telegram_configs:
-      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+      - bot_token: "${{TELEGRAM_TOKEN}}"
         chat_id: -1002060420752
         parse_mode: ""
 
