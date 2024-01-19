@@ -63,9 +63,41 @@ lazy_static! {
     pub static ref INDEXER_BLOCKS_LEFT: IntGaugeVec = register_int_gauge_vec!(
         opts!(
             "indexer_blocks_left",
-            "Number of blocks left to index for a give indexer."
+            "Number of blocks left to index for a given indexer."
         ),
         &["network", "type"]
+    )
+    .unwrap();
+    pub static ref API_PRICE_DEVIATION: GaugeVec = register_gauge_vec!(
+        opts!(
+            "api_price_deviation",
+            "Price deviation from the reference price."
+        ),
+        &["network", "pair"]
+    )
+    .unwrap();
+    pub static ref API_TIME_SINCE_LAST_UPDATE: GaugeVec = register_gauge_vec!(
+        opts!(
+            "api_time_since_last_update",
+            "Time since the last update in seconds."
+        ),
+        &["network", "pair"]
+    )
+    .unwrap();
+    pub static ref API_NUM_SOURCES: IntGaugeVec = register_int_gauge_vec!(
+        opts!(
+            "api_num_sources",
+            "Number of sources aggregated for a pair."
+        ),
+        &["network", "pair"]
+    )
+    .unwrap();
+    pub static ref API_SEQUENCER_DEVIATION: GaugeVec = register_gauge_vec!(
+        opts!(
+            "api_sequencer_deviation",
+            "Price deviation from starknet gateway price."
+        ),
+        &["network"]
     )
     .unwrap();
 }
