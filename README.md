@@ -37,6 +37,9 @@ DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgres'
 # (Optional) Defillama API Key
 DEFILLAMA_API_KEY=
 
+# Pragma API key
+PRAGMA_API_KEY=
+
 # RPC URL
 RPC_URL=
 

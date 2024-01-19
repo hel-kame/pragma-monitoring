@@ -1,3 +1,4 @@
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use starknet::providers::{jsonrpc::HttpTransport, JsonRpcClient, Provider};
 
@@ -130,14 +131,34 @@ pub async fn query_pragma_api(
         _ => panic!("Invalid network env"),
     };
 
-    let response = reqwest::get(&request_url)
+    // Set headers
+    let mut headers = HeaderMap::new();
+    let api_key = std::env::var("PRAGMA_API_KEY").expect("PRAGMA_API_KEY must be set");
+    headers.insert(
+        HeaderName::from_static("x-api-key"),
+        HeaderValue::from_str(&api_key).expect("Failed to parse api key"),
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(request_url)
+        .headers(headers)
+        .send()
         .await
         .map_err(|e| MonitoringError::Api(e.to_string()))?;
 
-    let data = response
-        .json::<PragmaDataDTO>()
-        .await
-        .map_err(|e| MonitoringError::Api(e.to_string()))?;
-
-    Ok(data)
+    match response.status() {
+        reqwest::StatusCode::OK => {
+            // on success, parse our JSON to an APIResponse
+            match response.json::<PragmaDataDTO>().await {
+                Ok(parsed) => Ok(parsed),
+                Err(e) => Err(MonitoringError::Api(e.to_string())),
+            }
+        }
+        reqwest::StatusCode::UNAUTHORIZED => Err(MonitoringError::Api("Unauthorized".to_string())),
+        other => Err(MonitoringError::Api(format!(
+            "Unexpected response status: {}",
+            other
+        ))),
+    }
 }
