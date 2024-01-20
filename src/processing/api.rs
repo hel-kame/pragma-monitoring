@@ -82,7 +82,7 @@ pub async fn process_sequencer_data() -> Result<(), MonitoringError> {
     let eth = block.eth_l1_gas_price.to_big_decimal(18);
     let strk = block.strk_l1_gas_price.to_big_decimal(18);
 
-    let expected_price = (eth / strk).to_f64().ok_or(MonitoringError::Conversion(
+    let expected_price = (strk / eth).to_f64().ok_or(MonitoringError::Conversion(
         "Failed to convert expected price to f64".to_string(),
     ))?;
 
