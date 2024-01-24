@@ -10,7 +10,6 @@ use crate::constants::PAIR_PRICE;
 use crate::constants::PRICE_DEVIATION;
 use crate::constants::PRICE_DEVIATION_SOURCE;
 use crate::constants::TIME_SINCE_LAST_UPDATE_PAIR_ID;
-use crate::constants::TIME_SINCE_LAST_UPDATE_PUBLISHER;
 use crate::diesel::QueryDsl;
 use crate::error::MonitoringError;
 use crate::models::FutureEntry;
@@ -149,11 +148,6 @@ pub async fn process_data_by_pair_and_source(
             let data_type = "future";
 
             // Get the labels
-            let time_labels = TIME_SINCE_LAST_UPDATE_PUBLISHER.with_label_values(&[
-                network_env,
-                &data.publisher,
-                data_type,
-            ]);
             let price_labels = PAIR_PRICE.with_label_values(&[network_env, pair, src, data_type]);
             let deviation_labels =
                 PRICE_DEVIATION.with_label_values(&[network_env, pair, src, data_type]);
@@ -172,7 +166,6 @@ pub async fn process_data_by_pair_and_source(
 
             // Set the metrics
             price_labels.set(normalized_price);
-            time_labels.set(time as f64);
             deviation_labels.set(deviation);
             source_deviation_labels.set(source_deviation);
 

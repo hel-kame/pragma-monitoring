@@ -9,6 +9,7 @@ use diesel_async::AsyncPgConnection;
 use dotenv::dotenv;
 use std::env;
 use std::time::Duration;
+use std::vec;
 use tokio::time::interval;
 
 use crate::processing::common::{check_publisher_balance, is_syncing};
@@ -57,7 +58,8 @@ async fn main() {
     let spot_monitoring = tokio::spawn(monitor(pool.clone(), true, &DataType::Spot));
     let future_monitoring = tokio::spawn(monitor(pool.clone(), true, &DataType::Future));
 
-    let balance_monitoring = tokio::spawn(balance_monitor());
+    let publisher_monitoring = tokio::spawn(publisher_monitor(pool.clone(), false));
+
     let api_monitoring = tokio::spawn(monitor_api());
 
     // Wait for the monitoring to finish
@@ -65,7 +67,7 @@ async fn main() {
         spot_monitoring,
         future_monitoring,
         api_monitoring,
-        balance_monitoring,
+        publisher_monitoring,
     ])
     .await;
 
@@ -80,7 +82,7 @@ async fn main() {
         log::error!("[API] Monitoring failed: {:?}", e);
     }
     if let Err(e) = &results[3] {
-        log::error!("[BALANCE] Monitoring failed: {:?}", e);
+        log::error!("[PUBLISHERS] Monitoring failed: {:?}", e);
     }
 }
 
@@ -205,19 +207,51 @@ pub(crate) async fn monitor(
     }
 }
 
-pub(crate) async fn balance_monitor() {
+pub(crate) async fn publisher_monitor(
+    pool: deadpool::managed::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>,
+    wait_for_syncing: bool,
+) {
     log::info!("[PUBLISHERS] Monitoring Publishers..");
+
     let mut interval = interval(Duration::from_secs(30));
     let monitoring_config: arc_swap::Guard<std::sync::Arc<config::Config>> = get_config(None).await;
 
     loop {
         interval.tick().await; // Wait for the next tick
 
+        if wait_for_syncing {
+            match is_syncing(&DataType::Spot).await {
+                Ok(true) => {
+                    log::info!("[PUBLISHERS] Indexers are still syncing ♻️");
+                    continue;
+                }
+                Ok(false) => {
+                    log::info!("PUBLISHERS] Indexers are synced ✅");
+                }
+                Err(e) => {
+                    log::error!(
+                        "[PUBLISHERS] Failed to check if indexers are syncing: {:?}",
+                        e
+                    );
+                    continue;
+                }
+            }
+        }
+
         let tasks: Vec<_> = monitoring_config
             .all_publishers()
             .iter()
-            .map(|(name, address)| {
-                tokio::spawn(Box::pin(check_publisher_balance(name.clone(), *address)))
+            .flat_map(|(publisher, address)| {
+                vec![
+                    tokio::spawn(Box::pin(check_publisher_balance(
+                        publisher.clone(),
+                        *address,
+                    ))),
+                    tokio::spawn(Box::pin(processing::spot::process_data_by_publisher(
+                        pool.clone(),
+                        publisher.clone(),
+                    ))),
+                ]
             })
             .collect();
 

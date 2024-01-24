@@ -144,11 +144,6 @@ pub async fn process_data_by_pair_and_source(
             let data_type = "spot";
 
             // Get the labels
-            let time_labels = TIME_SINCE_LAST_UPDATE_PUBLISHER.with_label_values(&[
-                network_env,
-                &data.publisher,
-                data_type,
-            ]);
             let price_labels = PAIR_PRICE.with_label_values(&[network_env, pair, src, data_type]);
             let deviation_labels =
                 PRICE_DEVIATION.with_label_values(&[network_env, pair, src, data_type]);
@@ -167,11 +162,56 @@ pub async fn process_data_by_pair_and_source(
 
             // Set the metrics
             price_labels.set(normalized_price);
-            time_labels.set(time as f64);
             deviation_labels.set(deviation);
             source_deviation_labels.set(source_deviation);
 
             Ok(time)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn process_data_by_publisher(
+    pool: deadpool::managed::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>,
+    publisher: String,
+) -> Result<(), MonitoringError> {
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| MonitoringError::Connection("Failed to get connection".to_string()))?;
+
+    let config = get_config(None).await;
+
+    let result: Result<SpotEntry, _> = match config.network().name {
+        NetworkName::Testnet => {
+            testnet_dsl::spot_entry
+                .filter(testnet_dsl::publisher.eq(publisher.clone()))
+                .order(testnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+        NetworkName::Mainnet => {
+            mainnet_dsl::mainnet_spot_entry
+                .filter(mainnet_dsl::publisher.eq(publisher.clone()))
+                .order(mainnet_dsl::block_timestamp.desc())
+                .first(&mut conn)
+                .await
+        }
+    };
+
+    log::info!("Processing data for publisher: {}", publisher);
+
+    match result {
+        Ok(data) => {
+            let network_env = &config.network_str();
+
+            let seconds_since_last_publish = time_since_last_update(&data);
+            let time_labels =
+                TIME_SINCE_LAST_UPDATE_PUBLISHER.with_label_values(&[network_env, &publisher]);
+
+            time_labels.set(seconds_since_last_publish as f64);
+
+            Ok(())
         }
         Err(e) => Err(e.into()),
     }
