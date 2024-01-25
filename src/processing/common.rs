@@ -118,15 +118,19 @@ pub struct PragmaDataDTO {
 pub async fn query_pragma_api(
     pair: &str,
     network_env: &str,
+    aggregation: &str,
+    interval: &str,
 ) -> Result<PragmaDataDTO, MonitoringError> {
     let request_url = match network_env {
         "Testnet" => format!(
-            "https://api.dev.pragma.build/node/v1/data/{pair}?aggregation=median&interval=1min&routing=true",
+            "https://api.dev.pragma.build/node/v1/data/{pair}?aggregation={aggregation}&interval={interval}&routing=true",
             pair = pair,
         ),
         "Mainnet" => format!(
-            "https://api.prod.pragma.build/node/v1/data/{pair}?aggregation=median&interval=1min&routing=true",
+            "https://api.prod.pragma.build/node/v1/data/{pair}?aggregation={aggregation}&interval={interval}&routing=true",
             pair = pair,
+            aggregation = aggregation,
+            interval = interval,
         ),
         _ => panic!("Invalid network env"),
     };

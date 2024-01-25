@@ -22,7 +22,7 @@ pub async fn process_data_by_pair(pair: String) -> Result<(), MonitoringError> {
     let config = get_config(None).await;
     let network_env = &config.network_str();
 
-    let result = query_pragma_api(&pair, network_env).await?;
+    let result = query_pragma_api(&pair, network_env, "median", "1min").await?;
 
     log::info!("Processing data for pair: {}", pair);
 
@@ -56,7 +56,7 @@ pub async fn process_sequencer_data() -> Result<(), MonitoringError> {
     let config = get_config(None).await;
     let network_env = config.network_str();
 
-    let result = query_pragma_api(&pair, network_env).await?;
+    let result = query_pragma_api(&pair, network_env, "twap", "15min").await?;
 
     log::info!("Processing sequencer data");
 
