@@ -121,11 +121,11 @@ pub async fn query_pragma_api(
 ) -> Result<PragmaDataDTO, MonitoringError> {
     let request_url = match network_env {
         "Testnet" => format!(
-            "https://api.dev.pragma.build/node/v1/data/{pair}?routing=true",
+            "https://api.dev.pragma.build/node/v1/data/{pair}?aggregation=median&interval=1min&routing=true",
             pair = pair,
         ),
         "Mainnet" => format!(
-            "https://api.prod.pragma.build/node/v1/data/{pair}?routing=true",
+            "https://api.prod.pragma.build/node/v1/data/{pair}?aggregation=median&interval=1min&routing=true",
             pair = pair,
         ),
         _ => panic!("Invalid network env"),
