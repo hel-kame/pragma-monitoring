@@ -10,7 +10,7 @@ groups:
           summary: "Time since the last update is too high"
           description: "The time since the last update from {{ $labels.publisher }} has exceeded 1800 seconds."
       - alert: WrongPrice
-        expr: price_deviation > 0.025
+        expr: abs(price_deviation) > 0.025
         for: 5m
         labels:
           severity: warning
@@ -26,7 +26,7 @@ groups:
           summary: "Too few sources"
           description: "The number of sources for {{ $labels.pair }} has fallen below 5."
       - alert: SourceDeviation
-        expr: price_deviation_source > 0.02
+        expr: abs(price_deviation_source) > 0.02
         for: 5m
         labels:
           severity: warning
@@ -50,7 +50,7 @@ groups:
           summary: "Publisher balance is low"
           description: "The {{ $labels.publisher }} balance is below 0.1 ETH."
       - alert: PriceDeviationTooHigh
-        expr: on_off_price_deviation > 0.025
+        expr: abs(on_off_price_deviation) > 0.025
         for: 5m
         labels:
           severity: critical
@@ -69,7 +69,7 @@ groups:
           summary: "Time since the last update is too high"
           description: "The time since the last update for {{ $labels.pair }} has exceeded 1800 seconds."
       - alert: WrongPrice
-        expr: api_price_deviation > 0.025
+        expr: abs(api_price_deviation) > 0.025
         for: 5m
         labels:
           severity: warning
@@ -87,7 +87,7 @@ groups:
           summary: "Too few sources"
           description: "The number of sources for {{ $labels.pair }} has fallen below 1."
       - alert: SequencerDeviation
-        expr: api_sequencer_deviation > 0.02
+        expr: abs(api_sequencer_deviation) > 0.02
         for: 5m
         labels:
           severity: critical
