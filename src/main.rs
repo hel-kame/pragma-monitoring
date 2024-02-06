@@ -1,7 +1,7 @@
 extern crate diesel;
 extern crate dotenv;
 
-use config::{get_config, DataType};
+use config::{get_config, periodic_config_update, DataType};
 use diesel_async::pooled_connection::deadpool::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
@@ -44,7 +44,6 @@ async fn main() {
     dotenv().ok();
 
     // Define the pairs to monitor
-
     let monitoring_config = get_config(None).await;
 
     log::info!("Successfully fetched config: {:?}", monitoring_config);
@@ -62,12 +61,15 @@ async fn main() {
 
     let api_monitoring = tokio::spawn(monitor_api());
 
+    let config_update = tokio::spawn(periodic_config_update());
+
     // Wait for the monitoring to finish
     let results = futures::future::join_all(vec![
         spot_monitoring,
         future_monitoring,
         api_monitoring,
         publisher_monitoring,
+        config_update,
     ])
     .await;
 
@@ -83,6 +85,10 @@ async fn main() {
     }
     if let Err(e) = &results[3] {
         log::error!("[PUBLISHERS] Monitoring failed: {:?}", e);
+    }
+
+    if let Err(e) = &results[4] {
+        log::error!("[CONFIG] Config Update failed: {:?}", e);
     }
 }
 
