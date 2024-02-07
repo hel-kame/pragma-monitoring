@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
+use strum::{Display, EnumIter, EnumString};
 
 use crate::{
     config::DataType,
@@ -74,4 +75,15 @@ impl Entry for FutureEntry {
     fn data_type(&self) -> DataType {
         DataType::Future
     }
+}
+
+#[derive(Default, Debug, PartialEq, EnumIter, Display)]
+pub enum VrfStatus {
+    #[default]
+    Uninitialized,
+    Received,
+    Fulfilled,
+    Cancelled,
+    OutOfGas,
+    Refunded,
 }

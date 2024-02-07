@@ -59,6 +59,8 @@ async fn main() {
 
     let publisher_monitoring = tokio::spawn(publisher_monitor(pool.clone(), false));
 
+    let vrf_monitoring = tokio::spawn(monitor_vrf(pool.clone(), true));
+
     let api_monitoring = tokio::spawn(monitor_api());
 
     let config_update = tokio::spawn(periodic_config_update());
@@ -210,6 +212,48 @@ pub(crate) async fn monitor(
                 Err(e) => log::error!("[{data_type}] Task failed with error: {:?}", e),
             }
         }
+    }
+}
+
+pub(crate) async fn monitor_vrf(
+    pool: deadpool::managed::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>,
+    wait_for_syncing: bool,
+) {
+    let monitoring_config = get_config(None).await;
+
+    let mut interval = interval(Duration::from_secs(MONITOR_INTERVAL));
+
+    loop {
+        interval.tick().await; // Wait for the next tick
+
+        // Skip if indexer is still syncing
+        if wait_for_syncing {
+            match is_vrf_syncing().await {
+                Ok(true) => {
+                    log::info!("[VRF] Indexers are still syncing ♻️");
+                    continue;
+                }
+                Ok(false) => {
+                    log::info!("[VRF] Indexers are synced ✅");
+                }
+                Err(e) => {
+                    log::error!("[VRF] Failed to check if indexers are syncing: {:?}", e);
+                    continue;
+                }
+            }
+        }
+
+        let task: Vec<_> = tokio::spawn(Box::pin(processing::vrf::process_vrf_data(pool.clone())));
+
+        let result = 
+
+            match result {
+                Ok(data) => match data {
+                    Ok(_) => log::info!("[{data_type}] Task finished successfully",),
+                    Err(e) => log::error!("[{data_type}] Task failed with error: {e}"),
+                },
+                Err(e) => log::error!("[{data_type}] Task failed with error: {:?}", e),
+            }
     }
 }
 

@@ -113,6 +113,11 @@ lazy_static! {
         &["network"]
     )
     .unwrap();
+    pub static ref VRF_REQUESTS: IntGaugeVec = register_int_gauge_vec!(
+        opts!("vrf_requests", "Number of VRF requests."),
+        &["network", "status", "requestor"]
+    )
+    .unwrap();
 }
 
 pub const FEE_TOKEN_DECIMALS: i32 = 18;

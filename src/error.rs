@@ -8,6 +8,7 @@ pub enum MonitoringError {
     Database(diesel::result::Error),
     Connection(String),
     Api(String),
+    Vrf(String),
     Conversion(String),
     OnChain(String),
     Provider(ProviderError),
