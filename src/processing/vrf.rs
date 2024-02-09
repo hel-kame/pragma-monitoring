@@ -1,5 +1,9 @@
+extern crate diesel;
+
 use bigdecimal::ToPrimitive;
 use diesel::ExpressionMethods;
+use diesel::PgRangeExpressionMethods;
+use diesel::SelectableHelper;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
@@ -7,6 +11,7 @@ use strum::IntoEnumIterator;
 
 use crate::config::get_config;
 use crate::config::NetworkName;
+use crate::diesel::QueryDsl;
 
 use crate::constants::VRF_REQUESTS;
 use crate::error::MonitoringError;
@@ -25,15 +30,21 @@ pub async fn process_vrf_data(
 
     let config = get_config(None).await;
 
-    let result: Result<VrfEntry, _> = match config.network().name {
-        NetworkName::Testnet => testnet_dsl::vrf_requests..filter(testnet_dsl::_cursor::).first(&mut conn).await,
+    let result: Result<Vec<VrfEntry>, _> = match config.network().name {
+        NetworkName::Testnet => {
+            testnet_dsl::vrf_requests
+                .filter(testnet_dsl::status::eq())
+                .select(VrfEntry::as_select())
+                .load(&mut conn)
+                .await
+        }
         NetworkName::Mainnet => {
             todo!("Implement mainnet vrf processing")
         }
     };
 
     match result {
-        Ok(vrf_entry) => {
+        Ok(vrf_entries) => {
             log::info!(
                 "Processing VRF data for request_id: {}",
                 vrf_entry.request_id
@@ -56,7 +67,7 @@ pub async fn process_vrf_data(
                 &vrf_entry.requestor_address,
             ]);
 
-            let num_requests 
+            let num_requests = vrf_entries.len() as f64;
 
             vrf_request_label.set(num_requests);
         }
