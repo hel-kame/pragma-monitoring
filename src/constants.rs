@@ -13,6 +13,7 @@ pub(crate) static COINGECKO_IDS: phf::Map<&'static str, &'static str> = phf_map!
     "WSTETH/USD" => "wrapped-steth",
     "LORDS/USD" => "lords",
     "STRK/USD" => "starknet",
+    "ZEND/USD" => "zklend-2",
 };
 
 lazy_static! {
