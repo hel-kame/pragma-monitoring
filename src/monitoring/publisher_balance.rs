@@ -34,7 +34,7 @@ pub async fn publisher_balance(publisher_address: Felt) -> Result<f64, Monitorin
         .ok_or(MonitoringError::Conversion(
             "Failed to convert to f64".to_string(),
         ))?
-        / 10u32.pow(FEE_TOKEN_DECIMALS) as f64;
+        / 10_f64.powi(FEE_TOKEN_DECIMALS as i32);
 
     Ok(on_chain_balance)
 }
