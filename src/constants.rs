@@ -15,6 +15,7 @@ pub(crate) static COINGECKO_IDS: phf::Map<&'static str, &'static str> = phf_map!
     "LORDS/USD" => "lords",
     "STRK/USD" => "starknet",
     "ZEND/USD" => "zklend-2",
+    "NSTR/USD" => "nostra",
 };
 
 lazy_static! {
@@ -119,7 +120,7 @@ lazy_static! {
 }
 
 #[allow(unused)]
-pub const FEE_TOKEN_DECIMALS: i32 = 18;
+pub const FEE_TOKEN_DECIMALS: u32 = 18;
 #[allow(unused)]
 pub const FEE_TOKEN_ADDRESS: &str =
     "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
