@@ -9,6 +9,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM cargo-chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
+ENV APP_NAME $APP_NAME
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libpq-dev \
