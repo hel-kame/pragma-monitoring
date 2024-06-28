@@ -73,8 +73,8 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:cache,mode=max
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
       - # Temp fix
