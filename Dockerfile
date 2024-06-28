@@ -1,3 +1,5 @@
+ # syntax=docker/dockerfile-upstream:master
+
 ARG RUST_VERSION=1.72.0
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-slim-bullseye AS cargo-chef
 WORKDIR /app
