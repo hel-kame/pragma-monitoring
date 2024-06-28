@@ -1,5 +1,4 @@
 ARG RUST_VERSION=1.72.0
-ARG APP_NAME=pragma-monitoring
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-slim-bullseye AS cargo-chef
 WORKDIR /app
 
@@ -9,7 +8,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM cargo-chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-ENV APP_NAME $APP_NAME
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libpq-dev \
@@ -22,7 +20,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN cargo chef cook --profile release --recipe-path recipe.json 
 COPY . .
 RUN cargo build --locked --release
-RUN cp ./target/release/$APP_NAME /bin/server
+ARG APP_NAME=pragma-monitoring
+ENV APP_NAME $APP_NAME
+RUN cp /app/target/release/$APP_NAME /bin/server
 
 FROM debian:bullseye-slim AS final
 RUN apt-get update && DEBIEN_FRONTEND=noninteractive apt-get install -y \ 
@@ -35,7 +35,6 @@ COPY --from=builder /bin/server /bin/
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 RUN adduser \
-    --no-log-init \
     --disabled-password \
     --gecos "" \
     --home "/nonexistent" \
